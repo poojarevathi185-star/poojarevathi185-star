@@ -1,0 +1,1018 @@
+import React, { useState } from 'react';
+import { PageView } from '../types/index.js';
+import { api } from '../services/api.js';
+import { MarkdownView } from '../components/common/MarkdownView.js';
+import { exportNoteToPDF } from '../services/pdfExport.js';
+import { GitHubConnectModal } from '../components/common/GitHubConnectModal.js';
+import {
+  FileText,
+  AlignLeft,
+  HelpCircle,
+  ListChecks,
+  Smile,
+  GraduationCap,
+  Calendar,
+  Sparkles,
+  ArrowRight,
+  Copy,
+  Check,
+  Bookmark,
+  AlertCircle,
+  Save,
+  FileDown,
+  Maximize2,
+  Minimize2,
+  Zap,
+  Github,
+} from 'lucide-react';
+
+interface StudyToolsPageProps {
+  onNavigate: (page: PageView, extra?: any) => void;
+  initialTool?: string;
+}
+
+type ToolType =
+  | 'summarizer'
+  | 'notes'
+  | 'questions'
+  | 'mcqs'
+  | 'explain'
+  | 'exam-answer'
+  | 'planner';
+
+const SUBJECTS = [
+  'Computer Science',
+  'Commerce',
+  'Mathematics',
+  'English',
+  'Economics',
+  'Business Studies',
+  'Programming',
+  'General Knowledge',
+];
+
+export const StudyToolsPage: React.FC<StudyToolsPageProps> = ({ onNavigate, initialTool }) => {
+  const [activeTool, setActiveTool] = useState<ToolType>(
+    (initialTool as ToolType) || 'summarizer'
+  );
+
+  // Tool 1: Summarizer
+  const [sumText, setSumText] = useState('');
+  const [sumSubject, setSumSubject] = useState('Computer Science');
+  const [sumResult, setSumResult] = useState<string | null>(null);
+
+  // Tool 2: Notes Generator
+  const [notesTopic, setNotesTopic] = useState('');
+  const [notesSubject, setNotesSubject] = useState('Computer Science');
+  const [notesResult, setNotesResult] = useState<string | null>(null);
+
+  // Tool 3: Question Generator
+  const [qTopic, setQTopic] = useState('');
+  const [qSubject, setQSubject] = useState('Computer Science');
+  const [qResult, setQResult] = useState<string | null>(null);
+
+  // Tool 4: MCQ Generator
+  const [mcqTopic, setMcqTopic] = useState('');
+  const [mcqSubject, setMcqSubject] = useState('Computer Science');
+  const [mcqCount, setMcqCount] = useState(5);
+  const [mcqResult, setMcqResult] = useState<any[] | null>(null);
+
+  // Tool 5: Explain Simply
+  const [explainConcept, setExplainConcept] = useState('');
+  const [explainSubject, setExplainSubject] = useState('Computer Science');
+  const [explainResult, setExplainResult] = useState<string | null>(null);
+
+  // Tool 6: Exam Answer
+  const [examQuestion, setExamQuestion] = useState('');
+  const [examMarks, setExamMarks] = useState<number>(5);
+  const [examSubject, setExamSubject] = useState('Computer Science');
+  const [examResult, setExamResult] = useState<string | null>(null);
+
+  // Tool 7: Study Planner
+  const [planSubject, setPlanSubject] = useState('Computer Science');
+  const [planDate, setPlanDate] = useState('2026-10-15');
+  const [planHours, setPlanHours] = useState(3);
+  const [planLevel, setPlanLevel] = useState('Intermediate');
+  const [planTopics, setPlanTopics] = useState('All units & previous year questions');
+  const [planResult, setPlanResult] = useState<string | null>(null);
+
+  // Shared status
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportToolResultPDF = async () => {
+    const content =
+      sumResult ||
+      notesResult ||
+      examResult ||
+      qResult ||
+      explainResult ||
+      planResult ||
+      (mcqResult
+        ? mcqResult
+            .map(
+              (m, i) =>
+                `# ${i + 1}. ${m.question}\n${m.options.map((opt: string, optI: number) => `- (${String.fromCharCode(65 + optI)}) ${opt} ${optI === m.correctAnswer ? '[CORRECT]' : ''}`).join('\n')}\n\n**Explanation:** ${m.explanation}\n\n---\n`
+            )
+            .join('\n')
+        : '');
+
+    if (!content) return;
+
+    const title =
+      activeTool === 'notes'
+        ? notesTopic || 'Study Notes'
+        : activeTool === 'exam-answer'
+        ? examQuestion || 'Exam Model Answer'
+        : activeTool === 'explain'
+        ? `Explanation: ${explainConcept}`
+        : activeTool === 'summarizer'
+        ? 'Lecture Summary & Key Points'
+        : activeTool === 'questions'
+        ? `Question Bank: ${qTopic}`
+        : activeTool === 'mcqs'
+        ? `Practice MCQs: ${mcqTopic}`
+        : `Study Timetable: ${planSubject}`;
+
+    const subject =
+      sumSubject || notesSubject || examSubject || qSubject || mcqSubject || explainSubject || planSubject;
+
+    try {
+      setExportingPdf(true);
+      await exportNoteToPDF({
+        title,
+        subtitle: `Generated by Gemini Study Tools • ${activeTool.toUpperCase()}`,
+        category: subject,
+        metadata: [
+          { label: 'Tool', value: activeTool },
+          { label: 'Subject', value: subject },
+          { label: 'Generated', value: new Date().toLocaleDateString() },
+        ],
+        content,
+        filename: `${title.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}_Study_Sheet.pdf`,
+      });
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleSaveToNotes = async (title: string, content: string, subject: string) => {
+    try {
+      await api.createNote({
+        title,
+        content,
+        subject,
+        tags: [subject, 'Generated via Study Tools'],
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error('Failed to save to notes:', err);
+    }
+  };
+
+  // Tool Handlers
+  const handleSummarize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sumText.trim()) return;
+    setError(null);
+    setLoading(true);
+    setSumResult(null);
+
+    try {
+      const res = await api.summarize({ text: sumText, subject: sumSubject });
+      setSumResult(res.summary);
+    } catch (err: any) {
+      setError(err.message || 'Summarization failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateNotes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notesTopic.trim()) return;
+    setError(null);
+    setLoading(true);
+    setNotesResult(null);
+
+    try {
+      const res = await api.generateNotes({ topic: notesTopic, subject: notesSubject });
+      setNotesResult(res.notes);
+    } catch (err: any) {
+      setError(err.message || 'Notes generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateQuestions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qTopic.trim()) return;
+    setError(null);
+    setLoading(true);
+    setQResult(null);
+
+    try {
+      const res = await api.generateQuestions({ topic: qTopic, subject: qSubject });
+      setQResult(res.questions);
+    } catch (err: any) {
+      setError(err.message || 'Question bank generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateMCQs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mcqTopic.trim()) return;
+    setError(null);
+    setLoading(true);
+    setMcqResult(null);
+
+    try {
+      const res = await api.generateMCQs({ topic: mcqTopic, subject: mcqSubject, count: mcqCount });
+      setMcqResult(res.mcqs);
+    } catch (err: any) {
+      setError(err.message || 'MCQ generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExplainSimply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!explainConcept.trim()) return;
+    setError(null);
+    setLoading(true);
+    setExplainResult(null);
+
+    try {
+      const res = await api.explainSimply({ concept: explainConcept, subject: explainSubject });
+      setExplainResult(res.explanation);
+    } catch (err: any) {
+      setError(err.message || 'Simplification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateExamAnswer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!examQuestion.trim()) return;
+    setError(null);
+    setLoading(true);
+    setExamResult(null);
+
+    try {
+      const res = await api.generateExamAnswer({
+        question: examQuestion,
+        marks: examMarks,
+        subject: examSubject,
+      });
+      setExamResult(res.answer);
+    } catch (err: any) {
+      setError(err.message || 'Exam answer generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeneratePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    setPlanResult(null);
+
+    try {
+      const res = await api.generateStudyPlan({
+        subject: planSubject,
+        examDate: planDate,
+        hoursPerDay: planHours,
+        currentLevel: planLevel,
+        topics: planTopics,
+      });
+      setPlanResult(res.plan);
+    } catch (err: any) {
+      setError(err.message || 'Study plan generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className={`space-y-6 transition-all ${
+        isFullScreen ? 'fixed inset-0 z-50 bg-slate-50 p-6 overflow-y-auto' : ''
+      }`}
+    >
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-indigo-600" />
+              AI Academic Study Tools
+            </h1>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200">
+              <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+              <span>Direct Answers Mode</span>
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500">
+            7 purpose-built Gemini tools delivering direct on-screen academic answers, formulas, and revision rubrics
+          </p>
+        </div>
+
+        {/* Action Buttons: Full Screen, GitHub & Quiz */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Full Screen Toggle */}
+          <button
+            onClick={() => setIsFullScreen(!isFullScreen)}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs flex items-center gap-1.5 ${
+              isFullScreen
+                ? 'bg-rose-50 border-rose-300 text-rose-700'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+            title={isFullScreen ? 'Exit Full Screen' : 'Enter Full Screen Focus Mode'}
+          >
+            {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span>{isFullScreen ? 'Exit Full Screen' : 'Full Screen'}</span>
+          </button>
+
+          {/* GitHub Connect */}
+          <button
+            onClick={() => setIsGitHubModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Github className="w-3.5 h-3.5 text-white" />
+            <span>GitHub</span>
+          </button>
+
+          {/* Quick Launch into Full Interactive Quiz */}
+          <button
+            onClick={() => onNavigate('quiz')}
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition cursor-pointer"
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>Interactive Quiz System</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tools Tab Selector */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+        {[
+          { id: 'summarizer', label: 'AI Summarizer', icon: <AlignLeft className="w-4 h-4" /> },
+          { id: 'notes', label: 'Notes Generator', icon: <FileText className="w-4 h-4" /> },
+          { id: 'exam-answer', label: 'Exam Answer (2/5/10/15 M)', icon: <GraduationCap className="w-4 h-4" /> },
+          { id: 'questions', label: 'Question Bank Builder', icon: <HelpCircle className="w-4 h-4" /> },
+          { id: 'mcqs', label: 'MCQ Generator', icon: <ListChecks className="w-4 h-4" /> },
+          { id: 'explain', label: 'Explain Simply (ELI5)', icon: <Smile className="w-4 h-4" /> },
+          { id: 'planner', label: 'Study Timetable Planner', icon: <Calendar className="w-4 h-4" /> },
+        ].map((tool) => (
+          <button
+            key={tool.id}
+            onClick={() => {
+              setActiveTool(tool.id as ToolType);
+              setError(null);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+              activeTool === tool.id
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            {tool.icon}
+            <span>{tool.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Tool Container */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Form Panel (5 cols) */}
+        <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+          {/* Tool A: Summarizer */}
+          {activeTool === 'summarizer' && (
+            <form onSubmit={handleSummarize} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">AI Academic Summarizer</h3>
+                <p className="text-xs text-slate-500">
+                  Paste lecture transcripts, textbook passages, or research articles to generate an executive overview and key takeaways.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={sumSubject}
+                  onChange={(e) => setSumSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Text to Summarize</label>
+                <textarea
+                  required
+                  rows={8}
+                  value={sumText}
+                  onChange={(e) => setSumText(e.target.value)}
+                  placeholder="Paste textbook section, notes, or lecture transcript here..."
+                  className="w-full p-3 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !sumText.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Summarizing with Gemini...' : 'Generate AI Summary'}
+              </button>
+            </form>
+          )}
+
+          {/* Tool B: Notes Generator */}
+          {activeTool === 'notes' && (
+            <form onSubmit={handleGenerateNotes} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Structured Notes Generator</h3>
+                <p className="text-xs text-slate-500">
+                  Enter an academic topic. Gemini will compile detailed study notes with formulas, definitions, diagrams guide, and revision checklists.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={notesSubject}
+                  onChange={(e) => setNotesSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Topic / Chapter Name</label>
+                <input
+                  type="text"
+                  required
+                  value={notesTopic}
+                  onChange={(e) => setNotesTopic(e.target.value)}
+                  placeholder="e.g. Normalization in Relational Databases (1NF to BCNF)"
+                  className="w-full p-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !notesTopic.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Drafting Notes with Gemini...' : 'Generate College Study Notes'}
+              </button>
+            </form>
+          )}
+
+          {/* Tool C: Exam Answer Generator */}
+          {activeTool === 'exam-answer' && (
+            <form onSubmit={handleGenerateExamAnswer} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Exam Answer Generator</h3>
+                <p className="text-xs text-slate-500">
+                  Tailors answers strictly according to university mark allocations (2, 5, 10, or 15 marks) with examiner scoring rubrics.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={examSubject}
+                  onChange={(e) => setExamSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Marks Weightage</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[2, 5, 10, 15].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setExamMarks(m)}
+                      className={`py-2 text-xs font-bold rounded-xl border transition ${
+                        examMarks === m
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {m} Marks
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Exam Question</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={examQuestion}
+                  onChange={(e) => setExamQuestion(e.target.value)}
+                  placeholder="e.g. Explain Virtual Memory, Paging, and Page Fault handling mechanism."
+                  className="w-full p-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !examQuestion.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Formatting Model Answer...' : `Generate ${examMarks}-Mark Exam Answer`}
+              </button>
+            </form>
+          )}
+
+          {/* Tool D: Question Bank Generator */}
+          {activeTool === 'questions' && (
+            <form onSubmit={handleGenerateQuestions} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Question Bank Builder</h3>
+                <p className="text-xs text-slate-500">
+                  Generates 2-mark short questions, 5-mark conceptual queries, 10/15-mark essay questions, and viva oral interview questions.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={qSubject}
+                  onChange={(e) => setQSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Topic / Unit</label>
+                <input
+                  type="text"
+                  required
+                  value={qTopic}
+                  onChange={(e) => setQTopic(e.target.value)}
+                  placeholder="e.g. Computer Networks: OSI 7-Layer Model & Routing Protocols"
+                  className="w-full p-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !qTopic.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Compiling Question Bank...' : 'Build Question Bank'}
+              </button>
+            </form>
+          )}
+
+          {/* Tool E: MCQ Generator */}
+          {activeTool === 'mcqs' && (
+            <form onSubmit={handleGenerateMCQs} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">MCQ Generator</h3>
+                <p className="text-xs text-slate-500">
+                  Generate multiple-choice practice questions with detailed pedagogical explanations for competitive and university tests.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={mcqSubject}
+                  onChange={(e) => setMcqSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Topic</label>
+                <input
+                  type="text"
+                  required
+                  value={mcqTopic}
+                  onChange={(e) => setMcqTopic(e.target.value)}
+                  placeholder="e.g. Time Complexity of Sorting Algorithms"
+                  className="w-full p-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Number of Questions</label>
+                <div className="flex gap-3">
+                  {[5, 10].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setMcqCount(num)}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
+                        mcqCount === num
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {num} MCQs
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !mcqTopic.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Synthesizing MCQs...' : 'Generate Practice MCQs'}
+              </button>
+            </form>
+          )}
+
+          {/* Tool F: Explain Simply */}
+          {activeTool === 'explain' && (
+            <form onSubmit={handleExplainSimply} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Explain Simply (ELI5)</h3>
+                <p className="text-xs text-slate-500">
+                  Turns intimidating equations, technical jargon, or convoluted theories into memorable real-life analogies.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={explainSubject}
+                  onChange={(e) => setExplainSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Difficult Topic / Concept</label>
+                <input
+                  type="text"
+                  required
+                  value={explainConcept}
+                  onChange={(e) => setExplainConcept(e.target.value)}
+                  placeholder="e.g. Quantum Entanglement or Deadlocks in Operating Systems"
+                  className="w-full p-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !explainConcept.trim()}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Simplifying Concept...' : 'Explain in Simple Terms'}
+              </button>
+            </form>
+          )}
+
+          {/* Tool G: Study Timetable Planner */}
+          {activeTool === 'planner' && (
+            <form onSubmit={handleGeneratePlan} className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">AI Study Timetable Planner</h3>
+                <p className="text-xs text-slate-500">
+                  Create a custom revision schedule with Pomodoro milestones, high-yield focus, and active recall pacing.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Target Subject</label>
+                <select
+                  value={planSubject}
+                  onChange={(e) => setPlanSubject(e.target.value)}
+                  className="w-full p-2 text-xs rounded-xl border border-slate-200 bg-white"
+                >
+                  {SUBJECTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Exam Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={planDate}
+                    onChange={(e) => setPlanDate(e.target.value)}
+                    className="w-full p-2 text-xs rounded-xl border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Daily Study Hours</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="14"
+                    required
+                    value={planHours}
+                    onChange={(e) => setPlanHours(Number(e.target.value))}
+                    className="w-full p-2 text-xs rounded-xl border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Syllabus / Focus Units</label>
+                <input
+                  type="text"
+                  value={planTopics}
+                  onChange={(e) => setPlanTopics(e.target.value)}
+                  placeholder="e.g. Unit 1 to 4 + Past 5 Years Solved Papers"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {loading ? 'Building Timetable...' : 'Generate Personalized Study Plan'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Right Output Results Panel (7 cols) */}
+        <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs min-h-[500px] flex flex-col justify-between">
+          <div className="space-y-4">
+            {/* Header with Copy & Save buttons */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                Gemini Generated Output
+              </span>
+
+              {/* Action buttons */}
+              {(sumResult || notesResult || examResult || qResult || explainResult || planResult || mcqResult) && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const text =
+                        sumResult ||
+                        notesResult ||
+                        examResult ||
+                        qResult ||
+                        explainResult ||
+                        planResult ||
+                        '';
+                      copyToClipboard(text);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleExportToolResultPDF}
+                    disabled={exportingPdf}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold transition disabled:opacity-50 cursor-pointer shadow-2xs"
+                    title="Export formatted PDF study sheet"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{exportingPdf ? 'Exporting...' : 'Export PDF'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const title =
+                        activeTool === 'notes'
+                          ? notesTopic
+                          : activeTool === 'exam-answer'
+                          ? examQuestion.slice(0, 40)
+                          : activeTool === 'explain'
+                          ? `Explained: ${explainConcept}`
+                          : `Study Plan: ${planSubject}`;
+                      const content =
+                        sumResult ||
+                        notesResult ||
+                        examResult ||
+                        qResult ||
+                        explainResult ||
+                        planResult ||
+                        '';
+                      const subj =
+                        sumSubject || notesSubject || examSubject || qSubject || explainSubject || planSubject;
+                      handleSaveToNotes(title, content, subj);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 font-semibold transition"
+                  >
+                    {savedSuccess ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Saved to Notes!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save to Notes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Results Content */}
+            <div className="overflow-y-auto max-h-[600px] pr-2">
+              {loading && (
+                <div className="py-20 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full border-3 border-indigo-600 border-t-transparent animate-spin mx-auto" />
+                  <p className="text-xs sm:text-sm font-semibold text-slate-700">
+                    Gemini 3.8 is analyzing and generating your content...
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Formatting academic headings, definitions, and diagrams
+                  </p>
+                </div>
+              )}
+
+              {!loading && activeTool === 'summarizer' && sumResult && (
+                <MarkdownView content={sumResult} />
+              )}
+
+              {!loading && activeTool === 'notes' && notesResult && (
+                <MarkdownView content={notesResult} />
+              )}
+
+              {!loading && activeTool === 'exam-answer' && examResult && (
+                <MarkdownView content={examResult} />
+              )}
+
+              {!loading && activeTool === 'questions' && qResult && (
+                <MarkdownView content={qResult} />
+              )}
+
+              {!loading && activeTool === 'explain' && explainResult && (
+                <MarkdownView content={explainResult} />
+              )}
+
+              {!loading && activeTool === 'planner' && planResult && (
+                <MarkdownView content={planResult} />
+              )}
+
+              {/* MCQs Special Renderer */}
+              {!loading && activeTool === 'mcqs' && mcqResult && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
+                    Multiple Choice Questions ({mcqResult.length} questions)
+                  </h3>
+                  {mcqResult.map((mcq, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-2.5">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900">
+                        {idx + 1}. {mcq.question}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        {mcq.options.map((opt: string, optIdx: number) => {
+                          const isCorrect = optIdx === mcq.correctAnswer;
+                          return (
+                            <div
+                              key={optIdx}
+                              className={`p-2 rounded-lg border ${
+                                isCorrect
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                                  : 'bg-white border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span className="font-mono mr-1.5 font-bold">
+                                {String.fromCharCode(65 + optIdx)}.
+                              </span>
+                              <span>{opt}</span>
+                              {isCorrect && (
+                                <span className="ml-1 text-[10px] text-emerald-600 font-bold">
+                                  (Correct)
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-indigo-50/60 border border-indigo-100/80 text-[11px] text-indigo-950">
+                        <span className="font-bold">Explanation:</span> {mcq.explanation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty placeholder */}
+              {!loading &&
+                !sumResult &&
+                !notesResult &&
+                !examResult &&
+                !qResult &&
+                !mcqResult &&
+                !explainResult &&
+                !planResult && (
+                  <div className="py-24 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs sm:text-sm font-medium text-slate-500">
+                      Configure your parameters on the left and click Generate
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Results will be formatted with clear Markdown, ready to copy or save
+                    </p>
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* GitHub Connect Modal */}
+      <GitHubConnectModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
+        userEmail="sanjayrevathi2006@gmail.com"
+      />
+    </div>
+  );
+};

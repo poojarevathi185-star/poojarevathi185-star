@@ -1,0 +1,8 @@
+{
+  "name": "Remix Gemini Powered Learning Assistant",
+  "description": "An AI-powered learning platform for students featuring intelligent question answering, study notes, summaries, interactive quizzes, file analysis, and study planning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
